@@ -70,12 +70,27 @@ class rankineView():
             self.le_TurbineInletCondition.setText("1.0")
             self.le_TurbineInletCondition.setEnabled(False)
         else:
-            pass
-            #JES Missing Code
-            #step 1: get saturated properties at PHigh
-            #step 2: convert the saturation temperature to proper units
-            #step 3:  update the text in the le_TurbineInletCondition widget
+            # Check which unit system is selected
+            pHighText = self.le_PHigh.text()
+            if pHighText == '':
+                return  # exit early if blank
+            try:
+                pHigh = float(pHighText)
 
+                # step 1: get saturated properties at PHigh
+                # note: we convert to bar because steam table expects it
+                pHigh_bar = pHigh if SI else pHigh * UC.psi_to_bar
+                tsat = Model.steam.getsatProps_p(pHigh_bar).tsat
+
+                # step 2: convert the saturation temperature to proper units
+                tsat_display = tsat if SI else UC.C_to_F(tsat)
+
+                # step 3: update the text in the le_TurbineInletCondition widget
+                self.le_TurbineInletCondition.setText(f"{tsat_display:.2f}")
+            except ValueError:
+                self.le_TurbineInletCondition.setText("")
+
+            self.le_TurbineInletCondition.setEnabled(True)
         # endregion
         x = self.rdo_Quality.isChecked()
         self.lbl_TurbineInletCondition.setText(
@@ -83,17 +98,57 @@ class rankineView():
 
     def setNewPHigh(self, Model=None):
         """
-                 This function checks the self.rb_SI.isChecked() to see which units are used.
-                 Then, it sets the text of lbl_SatPropHigh using SatPropsIsobar(float(self.le_PHigh.text())*PCF, SI=SI).txtOut
-                 here, PCF is the pressure conversion factor
-                 finally, we need to call the function self.SelectQualityOrTHigh()
-                 :return:
-                 """
-        #JES Missing Code
+            This function checks the self.rb_SI.isChecked() to see which units are used.
+            Then, it sets the text of lbl_SatPropHigh using SatPropsIsobar(float(self.le_PHigh.text())*PCF, SI=SI).txtOut
+            here, PCF is the pressure conversion factor
+            finally, we need to call the function self.SelectQualityOrTHigh()
+            :return:
+            """
+        # Step 1: check which unit system is active
+        SI = self.rb_SI.isChecked()
+        pHighText = self.le_PHigh.text()
+
+        if pHighText == '':
+            return  # skip if the field is blank
+
+        try:
+            # Step 2: convert pressure if needed
+            pHigh = float(pHighText)
+            pHigh_bar = pHigh if SI else pHigh * UC.psi_to_bar
+
+            # Step 3: get saturation properties and update label
+            satText = Model.steam.getsatProps_p(pHigh_bar).getTextOutput(SI=SI)
+            self.lbl_SatPropHigh.setText(satText)
+
+            # Step 4: if user has selected T High, update that too
+            self.selectQualityOrTHigh(Model=Model)
+
+        except ValueError:
+            self.lbl_SatPropHigh.setText("Invalid pressure input")
         pass
 
     def setNewPLow(self, Model=None):
-        #JES Missing Code
+        """
+            Updates the saturation property label for P Low whenever the input changes.
+            We convert the pressure to bar if needed, grab the saturation data, and
+            display it in lbl_SatPropLow. No need to update T High here.
+            :return: None
+            """
+        SI = self.rb_SI.isChecked()
+        pLowText = self.le_PLow.text()
+
+        if pLowText == '':
+            return  # no input to process
+
+        try:
+            pLow = float(pLowText)
+            pLow_bar = pLow if SI else pLow * UC.psi_to_bar
+
+            satText = Model.steam.getsatProps_p(pLow_bar).getTextOutput(SI=SI)
+            self.lbl_SatPropLow.setText(satText)
+
+        except ValueError:
+            self.lbl_SatPropLow.setText("Invalid pressure input")
         pass
 
     def outputToGUI(self, Model=None):
@@ -129,16 +184,36 @@ class rankineView():
         # Update units displayed on labels
 
         #Step 1. Update pressures for PHigh and PLow
-        pCF=1 if Model.SI else UC.bar_to_psi
-        #JES Missing Code
+        pCF=1 if Model.SI else UC.bar_to_psi # pressure conversion factor
+        try:
+            pHigh = float(self.le_PHigh.text())
+            self.le_PHigh.setText(f"{pHigh * pCF:.2f}")
+        except ValueError:
+            pass
+
+        try:
+            pLow = float(self.le_PLow.text())
+            self.le_PLow.setText(f"{pLow * pCF:.2f}")
+        except ValueError:
+            pass
 
         #Step 2. Update THigh if it is not None
         if not self.rdo_Quality.isChecked():
-            #JES Missing Code
+            try:
+                pHigh = float(self.le_PHigh.text())
+                pHigh_bar = pHigh if Model.SI else pHigh * UC.psi_to_bar
+                tsat = Model.steam.getsatProps_p(pHigh_bar).tsat
+                tsat_display = tsat if Model.SI else UC.C_to_F(tsat)
+                self.le_TurbineInletCondition.setText(f"{tsat_display:.2f}")
+            except ValueError:
+                self.le_TurbineInletCondition.setText("")
             pass
 
         #Step 3. Update the units for labels
-        #JES Missing Code
+        self.lbl_PHigh.setText("P High (bar)" if Model.SI else "P High (psi)")
+        self.lbl_PLow.setText("P Low (bar)" if Model.SI else "P Low (psi)")
+        x = self.rdo_Quality.isChecked()
+        self.lbl_TurbineInletCondition.setText("Turbine Inlet: {}{}".format('x' if x else 'THigh','' if x else (' (C)' if Model.SI else ' (F)')))
         pass
 
     def print_summary(self, Model=None):
